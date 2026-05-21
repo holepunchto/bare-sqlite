@@ -11,16 +11,72 @@
 
 typedef utf8_t bare_sqlite_path_t[4096];
 
-typedef struct {
-  sqlite3 *handle;
-} bare_sqlite_t;
+typedef struct bare_sqlite_statement_s bare_sqlite_statement_t;
 
 typedef struct {
+  sqlite3 *handle;
+
+  bare_sqlite_statement_t *statements;
+} bare_sqlite_t;
+
+struct bare_sqlite_statement_s {
   sqlite3_stmt *handle;
+
   bool read_bigints;
   bool allow_bare_named_parameters;
   bool allow_unknown_named_parameters;
-} bare_sqlite_statement_t;
+
+  bare_sqlite_t *db;
+  bare_sqlite_statement_t *prev;
+  bare_sqlite_statement_t *next;
+};
+
+static void
+bare_sqlite__insert_statement(bare_sqlite_t *db, bare_sqlite_statement_t *stmt) {
+  stmt->db = db;
+  stmt->prev = NULL;
+  stmt->next = db->statements;
+
+  if (db->statements != NULL) db->statements->prev = stmt;
+
+  db->statements = stmt;
+}
+
+static void
+bare_sqlite__remove_statement(bare_sqlite_statement_t *stmt) {
+  if (stmt->db == NULL) return;
+
+  if (stmt->prev != NULL) stmt->prev->next = stmt->next;
+  else stmt->db->statements = stmt->next;
+
+  if (stmt->next != NULL) stmt->next->prev = stmt->prev;
+
+  stmt->db = NULL;
+  stmt->prev = NULL;
+  stmt->next = NULL;
+}
+
+static void
+bare_sqlite__finalize_statements(bare_sqlite_t *db) {
+  bare_sqlite_statement_t *stmt = db->statements;
+
+  while (stmt != NULL) {
+    bare_sqlite_statement_t *next = stmt->next;
+
+    if (stmt->handle != NULL) {
+      sqlite3_finalize(stmt->handle);
+      stmt->handle = NULL;
+    }
+
+    stmt->db = NULL;
+    stmt->prev = NULL;
+    stmt->next = NULL;
+
+    stmt = next;
+  }
+
+  db->statements = NULL;
+}
 
 static const char *
 bare_sqlite__code(int errcode) {
@@ -71,6 +127,8 @@ static void
 bare_sqlite__on_finalize_db(js_env_t *env, void *data, void *hint) {
   bare_sqlite_t *db = (bare_sqlite_t *) data;
 
+  bare_sqlite__finalize_statements(db);
+
   if (db->handle != NULL) sqlite3_close_v2(db->handle);
 
   free(db);
@@ -81,6 +139,8 @@ bare_sqlite__on_finalize_statement(js_env_t *env, void *data, void *hint) {
   bare_sqlite_statement_t *stmt = (bare_sqlite_statement_t *) data;
 
   if (stmt->handle != NULL) sqlite3_finalize(stmt->handle);
+
+  bare_sqlite__remove_statement(stmt);
 
   free(stmt);
 }
@@ -147,6 +207,7 @@ bare_sqlite_open(js_env_t *env, js_callback_info_t *info) {
 
   bare_sqlite_t *db = malloc(sizeof(bare_sqlite_t));
   db->handle = handle;
+  db->statements = NULL;
 
   js_value_t *result;
   err = js_create_external(env, db, bare_sqlite__on_finalize_db, NULL, &result);
@@ -170,6 +231,8 @@ bare_sqlite_close(js_env_t *env, js_callback_info_t *info) {
   bare_sqlite_t *db;
   err = js_get_value_external(env, argv[0], (void **) &db);
   assert(err == 0);
+
+  bare_sqlite__finalize_statements(db);
 
   int status = sqlite3_close_v2(db->handle);
 
@@ -389,6 +452,8 @@ bare_sqlite_prepare(js_env_t *env, js_callback_info_t *info) {
   stmt->read_bigints = false;
   stmt->allow_bare_named_parameters = true;
   stmt->allow_unknown_named_parameters = false;
+
+  bare_sqlite__insert_statement(db, stmt);
 
   js_value_t *result;
   err = js_create_external(env, stmt, bare_sqlite__on_finalize_statement, NULL, &result);
@@ -893,6 +958,32 @@ bare_sqlite_read_bigints(js_env_t *env, js_callback_info_t *info) {
 }
 
 static js_value_t *
+bare_sqlite_finalize(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 1;
+  js_value_t *argv[1];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 1);
+
+  bare_sqlite_statement_t *stmt;
+  err = js_get_value_external(env, argv[0], (void **) &stmt);
+  assert(err == 0);
+
+  if (stmt->handle != NULL) {
+    sqlite3_finalize(stmt->handle);
+    stmt->handle = NULL;
+  }
+
+  bare_sqlite__remove_statement(stmt);
+
+  return NULL;
+}
+
+static js_value_t *
 bare_sqlite_reset(js_env_t *env, js_callback_info_t *info) {
   int err;
 
@@ -1084,6 +1175,7 @@ bare_sqlite_exports(js_env_t *env, js_value_t *exports) {
   V("bind", bare_sqlite_bind)
   V("step", bare_sqlite_step)
   V("reset", bare_sqlite_reset)
+  V("finalize", bare_sqlite_finalize)
   V("expandedSQL", bare_sqlite_expanded_sql)
   V("columns", bare_sqlite_columns)
   V("allowBareNamedParameters", bare_sqlite_allow_bare_named_parameters)
