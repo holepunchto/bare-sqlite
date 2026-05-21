@@ -252,7 +252,9 @@ test('iterate accepts named and positional parameters', (t) => {
   `)
 
   const rows = []
-  for (const row of db.prepare('SELECT id FROM t WHERE group_id = :g ORDER BY id').iterate({ g: 1 })) {
+  for (const row of db
+    .prepare('SELECT id FROM t WHERE group_id = :g ORDER BY id')
+    .iterate({ g: 1 })) {
     rows.push(row.id)
   }
 
@@ -300,7 +302,7 @@ test('iterate propagates runtime errors mid-iteration', (t) => {
   const stmt = db.prepare('SELECT id, json(src) AS j FROM t')
 
   t.exception(() => {
-    for (const _row of stmt.iterate()) {}
+    for (const row of stmt.iterate());
   }, /malformed/)
 
   db.exec('DELETE FROM t WHERE id = 2')
@@ -428,10 +430,7 @@ test('loadExtension and enableLoadExtension require allowExtension', (t) => {
 
 test('loadExtension with a missing file throws a SQLite error', (t) => {
   using db = new DatabaseSync(':memory:', { allowExtension: true })
-  t.exception(
-    () => db.loadExtension('/definitely/not/a/real/extension.so'),
-    /SQLiteError/
-  )
+  t.exception(() => db.loadExtension('/definitely/not/a/real/extension.so'), /SQLiteError/)
 })
 
 test('enableLoadExtension can be toggled when allowed', (t) => {
