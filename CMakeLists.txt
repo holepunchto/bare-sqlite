@@ -38,5 +38,7 @@ target_sources(
 target_link_libraries(
   ${bare_sqlite}
   PRIVATE
+    $<TARGET_OBJECTS:sqlite3>
+  PUBLIC
     sqlite3
 )
