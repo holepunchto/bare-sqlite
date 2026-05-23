@@ -7,7 +7,7 @@ project(bare_sqlite C)
 
 fetch_package("https://sqlite.org/2026/sqlite-amalgamation-3530100.zip" SOURCE_DIR sqlite3)
 
-add_library(sqlite3)
+add_library(sqlite3 OBJECT)
 
 target_sources(
   sqlite3
