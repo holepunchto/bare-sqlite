@@ -38,7 +38,7 @@ target_sources(
 if(WIN32)
   target_sources(
     ${bare_sqlite}
-    PRIVATE
+    INTERFACE
       lib/sqlite3.def
   )
 endif()
