@@ -33,12 +33,12 @@ target_sources(
   ${bare_sqlite}
   PRIVATE
     binding.c
+  PRIVATE
+    $<TARGET_OBJECTS:sqlite3>
 )
 
 target_link_libraries(
   ${bare_sqlite}
-  PRIVATE
-    $<TARGET_OBJECTS:sqlite3>
   PUBLIC
     sqlite3
 )
