@@ -35,6 +35,14 @@ target_sources(
     binding.c
 )
 
+if(WIN32)
+  target_sources(
+    ${bare_sqlite}
+    INTERFACE
+      lib/sqlite3.def
+  )
+endif()
+
 target_link_libraries(
   ${bare_sqlite}
   PRIVATE
