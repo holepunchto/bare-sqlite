@@ -584,7 +584,9 @@ bare_sqlite__bind_params(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_
     const char *name = sqlite3_bind_parameter_name(stmt->handle, i);
 
     if (name == NULL) {
-      if (pos_idx >= pos_len) continue;
+      if (pos_idx >= pos_len) {
+        return js_throw_type_error(env, NULL, "Missing positional parameter");
+      }
 
       js_value_t *value;
       err = js_get_element(env, positional, pos_idx++, &value);
@@ -613,7 +615,9 @@ bare_sqlite__bind_params(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_
       if (found) key = name + 1;
     }
 
-    if (!found) continue;
+    if (!found) {
+      return js_throw_type_error(env, NULL, "Missing named parameter");
+    }
 
     js_value_t *value;
     err = js_get_named_property(env, named, key, &value);
@@ -621,6 +625,10 @@ bare_sqlite__bind_params(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_
 
     err = bare_sqlite__bind_value(env, stmt->handle, i, value);
     if (err < 0) return err;
+  }
+
+  if (pos_idx < pos_len) {
+    return js_throw_type_error(env, NULL, "Too many positional parameters");
   }
 
   if (has_named && !stmt->allow_unknown_named_parameters) {
