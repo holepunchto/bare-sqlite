@@ -2,7 +2,6 @@ import Buffer from 'bare-buffer'
 
 interface SQLiteStatementSync {
   readonly sourceSQL: string
-
   readonly expandedSQL: string | null
 
   all<T extends SQLiteStatementSync.Row = SQLiteStatementSync.Row>(
@@ -26,9 +25,7 @@ interface SQLiteStatementSync {
   columns(): SQLiteStatementSync.Column[]
 
   setAllowBareNamedParameters(allow: boolean): void
-
   setAllowUnknownNamedParameters(allow: boolean): void
-
   setReadBigInts(enabled: boolean): void
 
   [Symbol.dispose](): void
