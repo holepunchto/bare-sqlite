@@ -502,3 +502,52 @@ test('missing named parameter throws even with allowUnknownNamedParameters', (t)
   stmt.setAllowUnknownNamedParameters(true)
   t.exception(() => stmt.get({ a: 1 }), /INVALID_ARGUMENT/)
 })
+
+test('values returns rows as arrays in column order', (t) => {
+  using db = new DatabaseSync(':memory:')
+  db.exec(`
+    CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT);
+    INSERT INTO t (name) VALUES ('a'), ('b');
+  `)
+  const rows = db.prepare('SELECT id, name FROM t ORDER BY id').values()
+  t.alike(rows, [
+    [1, 'a'],
+    [2, 'b']
+  ])
+})
+
+test('values yields an empty array for an empty result set', (t) => {
+  using db = new DatabaseSync(':memory:')
+  db.exec('CREATE TABLE t (id INTEGER)')
+  t.alike(db.prepare('SELECT id FROM t').values(), [])
+})
+
+test('values wraps blob columns as Buffer', (t) => {
+  using db = new DatabaseSync(':memory:')
+  db.prepare('CREATE TABLE t (b BLOB)').run()
+  const blob = new Uint8Array([1, 2, 3])
+  db.prepare('INSERT INTO t VALUES (?)').run(blob)
+  const rows = db.prepare('SELECT b FROM t').values()
+  t.ok(Buffer.isBuffer(rows[0][0]))
+  t.alike(rows[0][0], Buffer.from(blob))
+})
+
+test('values respects setReadBigInts', (t) => {
+  using db = new DatabaseSync(':memory:')
+  db.exec('CREATE TABLE t (v INTEGER); INSERT INTO t VALUES (42);')
+  const stmt = db.prepare('SELECT v FROM t')
+  stmt.setReadBigInts(true)
+  t.alike(stmt.values(), [[42n]])
+})
+
+test('values supports parameter binding', (t) => {
+  using db = new DatabaseSync(':memory:')
+  db.exec(`
+    CREATE TABLE t (id INTEGER PRIMARY KEY, group_id INTEGER);
+    INSERT INTO t (group_id) VALUES (1), (2), (1);
+  `)
+  const rows = db
+    .prepare('SELECT id FROM t WHERE group_id = :g ORDER BY id')
+    .values({ g: 1 })
+  t.alike(rows, [[1], [3]])
+})

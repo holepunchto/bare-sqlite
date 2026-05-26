@@ -9,6 +9,10 @@ interface SQLiteStatementSync {
     ...params: SQLiteStatementSync.Parameters
   ): T[]
 
+  values<T extends SQLiteStatementSync.Value[] = SQLiteStatementSync.Value[]>(
+    ...params: SQLiteStatementSync.Parameters
+  ): T[]
+
   get<T extends SQLiteStatementSync.Row = SQLiteStatementSync.Row>(
     ...params: SQLiteStatementSync.Parameters
   ): T | undefined
