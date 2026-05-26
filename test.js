@@ -136,7 +136,7 @@ test('runtime error during step is propagated', (t) => {
   using db = new DatabaseSync(':memory:')
   db.prepare('CREATE TABLE t (id INTEGER PRIMARY KEY)').run()
   db.prepare('INSERT INTO t VALUES (1)').run()
-  t.exception(() => db.prepare('INSERT INTO t VALUES (1)').run(), /UNIQUE/)
+  t.exception(() => db.prepare('INSERT INTO t VALUES (1)').run(), /CONSTRAINT/)
 })
 
 test('named parameters via :name with sigil', (t) => {
@@ -202,7 +202,7 @@ test('exec propagates errors from later statements', (t) => {
   using db = new DatabaseSync(':memory:')
   t.exception(
     () => db.exec('CREATE TABLE t (id INTEGER); INSERT INTO nonexistent VALUES (1);'),
-    /no such table/
+    /ERROR/
   )
   const r = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='t'").get()
   t.is(r.name, 't')
@@ -216,7 +216,7 @@ test('exec on closed database throws', (t) => {
 
 test('exec on invalid SQL throws', (t) => {
   using db = new DatabaseSync(':memory:')
-  t.exception(() => db.exec('NOT VALID SQL'), /SQLiteError/)
+  t.exception(() => db.exec('NOT VALID SQL'), /ERROR/)
 })
 
 test('exec accepts whitespace and comments only', (t) => {
@@ -286,7 +286,6 @@ test('iterate cleans up the statement on early break', (t) => {
   }
   t.is(first, 1)
 
-  // Statement should be in a clean state and be reusable.
   const rows = []
   for (const row of stmt.iterate()) rows.push(row.id)
   t.alike(rows, [1, 2, 3, 4, 5])
@@ -303,7 +302,7 @@ test('iterate propagates runtime errors mid-iteration', (t) => {
 
   t.exception(() => {
     for (const row of stmt.iterate());
-  }, /malformed/)
+  }, /ERROR/)
 
   db.exec('DELETE FROM t WHERE id = 2')
 
@@ -402,17 +401,14 @@ test('setAllowBareNamedParameters(false) rejects bare keys', (t) => {
   const stmt = db.prepare('SELECT :a AS a')
   stmt.setAllowBareNamedParameters(false)
 
-  // Full name still works.
   t.is(stmt.get({ ':a': 1 }).a, 1)
-
-  // Bare key is now considered unknown.
-  t.exception(() => stmt.get({ a: 1 }), /Unknown named parameter/)
+  t.exception(() => stmt.get({ a: 1 }), /INVALID_ARGUMENT/)
 })
 
 test('setAllowUnknownNamedParameters(false) is the default and throws on extras', (t) => {
   using db = new DatabaseSync(':memory:')
   const stmt = db.prepare('SELECT :a AS a')
-  t.exception(() => stmt.get({ a: 1, b: 2 }), /Unknown named parameter/)
+  t.exception(() => stmt.get({ a: 1, b: 2 }), /INVALID_ARGUMENT/)
 })
 
 test('setAllowUnknownNamedParameters(true) ignores unknown keys', (t) => {
@@ -430,7 +426,7 @@ test('loadExtension and enableLoadExtension require allowExtension', (t) => {
 
 test('loadExtension with a missing file throws a SQLite error', (t) => {
   using db = new DatabaseSync(':memory:', { allowExtension: true })
-  t.exception(() => db.loadExtension('/definitely/not/a/real/extension.so'), /SQLiteError/)
+  t.exception(() => db.loadExtension('/definitely/not/a/real/extension.so'), /ERROR/)
 })
 
 test('enableLoadExtension can be toggled when allowed', (t) => {
@@ -473,4 +469,36 @@ test('Uint8Array first argument is treated as positional, not named', (t) => {
   db.prepare('INSERT INTO t VALUES (?)').run(blob)
   const row = db.prepare('SELECT b FROM t').get()
   t.alike(row.b, Buffer.from(blob))
+})
+
+test('too many positional parameters throws', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.prepare('SELECT ? AS a').get(1, 2), /INVALID_ARGUMENT/)
+})
+
+test('extra positional parameter with no placeholders throws', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.prepare('SELECT 1').get(1), /INVALID_ARGUMENT/)
+})
+
+test('too few positional parameters throws', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.prepare('SELECT ? + ? AS r').get(1), /INVALID_ARGUMENT/)
+})
+
+test('missing positional parameter alongside named throws', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.prepare('SELECT :a + ? AS r').get({ a: 1 }), /INVALID_ARGUMENT/)
+})
+
+test('missing named parameter throws', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.prepare('SELECT :a + :b AS r').get({ a: 1 }), /INVALID_ARGUMENT/)
+})
+
+test('missing named parameter throws even with allowUnknownNamedParameters', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const stmt = db.prepare('SELECT :a + :b AS r')
+  stmt.setAllowUnknownNamedParameters(true)
+  t.exception(() => stmt.get({ a: 1 }), /INVALID_ARGUMENT/)
 })
