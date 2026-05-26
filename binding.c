@@ -734,6 +734,27 @@ bare_sqlite__build_row(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_t 
   return 0;
 }
 
+static int
+bare_sqlite__build_row_values(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_t **result) {
+  int err;
+
+  err = js_create_array(env, result);
+  if (err < 0) return err;
+
+  int n = sqlite3_column_count(stmt->handle);
+
+  for (int i = 0; i < n; i++) {
+    js_value_t *value;
+    err = bare_sqlite__column_value(env, stmt, i, &value);
+    if (err < 0) return err;
+
+    err = js_set_element(env, *result, (uint32_t) i, value);
+    if (err < 0) return err;
+  }
+
+  return 0;
+}
+
 static js_value_t *
 bare_sqlite_bind(js_env_t *env, js_callback_info_t *info) {
   int err;
@@ -1162,6 +1183,54 @@ bare_sqlite_all(js_env_t *env, js_callback_info_t *info) {
 }
 
 static js_value_t *
+bare_sqlite_values(js_env_t *env, js_callback_info_t *info) {
+  int err;
+
+  size_t argc = 3;
+  js_value_t *argv[3];
+
+  err = js_get_callback_info(env, info, &argc, argv, NULL, NULL);
+  assert(err == 0);
+
+  assert(argc == 3);
+
+  bare_sqlite_statement_t *stmt;
+  err = js_get_value_external(env, argv[0], (void **) &stmt);
+  assert(err == 0);
+
+  sqlite3_reset(stmt->handle);
+  sqlite3_clear_bindings(stmt->handle);
+
+  err = bare_sqlite__bind_params(env, stmt, argv[1], argv[2]);
+  if (err < 0) return NULL;
+
+  js_value_t *rows;
+  err = js_create_array(env, &rows);
+  assert(err == 0);
+
+  int status;
+  uint32_t i = 0;
+
+  while ((status = sqlite3_step(stmt->handle)) == SQLITE_ROW) {
+    js_value_t *row;
+    err = bare_sqlite__build_row_values(env, stmt, &row);
+    if (err < 0) return NULL;
+
+    err = js_set_element(env, rows, i++, row);
+    assert(err == 0);
+  }
+
+  if (status != SQLITE_DONE) {
+    err = bare_sqlite__throw_error(env, status, sqlite3_errmsg(sqlite3_db_handle(stmt->handle)));
+    assert(err == 0);
+
+    return NULL;
+  }
+
+  return rows;
+}
+
+static js_value_t *
 bare_sqlite_exports(js_env_t *env, js_value_t *exports) {
   int err;
 
@@ -1192,6 +1261,7 @@ bare_sqlite_exports(js_env_t *env, js_value_t *exports) {
   V("run", bare_sqlite_run)
   V("get", bare_sqlite_get)
   V("all", bare_sqlite_all)
+  V("values", bare_sqlite_values)
 #undef V
 
   return exports;
