@@ -546,8 +546,6 @@ test('values supports parameter binding', (t) => {
     CREATE TABLE t (id INTEGER PRIMARY KEY, group_id INTEGER);
     INSERT INTO t (group_id) VALUES (1), (2), (1);
   `)
-  const rows = db
-    .prepare('SELECT id FROM t WHERE group_id = :g ORDER BY id')
-    .values({ g: 1 })
+  const rows = db.prepare('SELECT id FROM t WHERE group_id = :g ORDER BY id').values({ g: 1 })
   t.alike(rows, [[1], [3]])
 })
