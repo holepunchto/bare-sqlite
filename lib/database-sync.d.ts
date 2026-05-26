@@ -1,4 +1,5 @@
 import StatementSync from './statement-sync'
+import TagStore from './tag-store'
 
 interface SQLiteDatabaseSync {
   readonly isOpen: boolean
@@ -8,6 +9,8 @@ interface SQLiteDatabaseSync {
 
   exec(sql: string): void
   prepare(sql: string): StatementSync
+
+  createTagStore(maxSize?: number): TagStore
 
   enableLoadExtension(allow: boolean): void
   loadExtension(path: string, entryPoint?: string | null): void

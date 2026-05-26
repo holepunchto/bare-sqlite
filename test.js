@@ -549,3 +549,131 @@ test('values supports parameter binding', (t) => {
   const rows = db.prepare('SELECT id FROM t WHERE group_id = :g ORDER BY id').values({ g: 1 })
   t.alike(rows, [[1], [3]])
 })
+
+test('tag store runs tagged queries', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+
+  sql.run`CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)`
+  sql.run`INSERT INTO t (name) VALUES (${'alice'})`
+  sql.run`INSERT INTO t (name) VALUES (${'bob'})`
+
+  t.alike(sql.all`SELECT name FROM t ORDER BY id`, [{ name: 'alice' }, { name: 'bob' }])
+  t.alike(sql.get`SELECT name FROM t WHERE id = ${1}`, { name: 'alice' })
+  t.is(sql.get`SELECT name FROM t WHERE id = ${99}`, undefined)
+})
+
+test('tag store values returns array rows', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+
+  sql.run`CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)`
+  sql.run`INSERT INTO t (name) VALUES (${'a'})`
+  sql.run`INSERT INTO t (name) VALUES (${'b'})`
+
+  t.alike(sql.values`SELECT id, name FROM t ORDER BY id`, [
+    [1, 'a'],
+    [2, 'b']
+  ])
+})
+
+test('tag store iterate yields rows', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+
+  sql.run`CREATE TABLE t (id INTEGER PRIMARY KEY)`
+  sql.run`INSERT INTO t VALUES (1), (2), (3)`
+
+  const ids = []
+  for (const row of sql.iterate`SELECT id FROM t ORDER BY id`) ids.push(row.id)
+  t.alike(ids, [1, 2, 3])
+})
+
+test('tag store run returns RunResult', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+
+  sql.run`CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)`
+  const r = sql.run`INSERT INTO t (name) VALUES (${'alice'})`
+  t.is(r.changes, 1)
+  t.is(r.lastInsertRowid, 1)
+})
+
+test('tag store caches identical SQL across distinct call sites', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+
+  sql.run`CREATE TABLE t (id INTEGER PRIMARY KEY)`
+  sql.run`INSERT INTO t VALUES (1)`
+  const before = sql.size
+
+  const a = (id) => sql.get`SELECT id FROM t WHERE id = ${id}`
+  const b = (id) => sql.get`SELECT id FROM t WHERE id = ${id}`
+
+  a(1)
+  t.is(sql.size, before + 1)
+  b(1)
+  t.is(sql.size, before + 1)
+})
+
+test('tag store size reflects unique SQL strings', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+  t.is(sql.size, 0)
+
+  sql.run`CREATE TABLE t (id INTEGER)`
+  t.is(sql.size, 1)
+
+  sql.run`INSERT INTO t VALUES (${1})`
+  sql.run`INSERT INTO t VALUES (${2})`
+  t.is(sql.size, 2)
+})
+
+test('tag store capacity defaults to 1000', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+  t.is(sql.capacity, 1000)
+})
+
+test('tag store evicts LRU entries when over capacity', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore(2)
+
+  sql.run`CREATE TABLE t (id INTEGER)`
+  sql.all`SELECT 1 FROM t`
+  t.is(sql.size, 2)
+
+  sql.all`SELECT 2 FROM t`
+  t.is(sql.size, 2)
+})
+
+test('tag store clear empties the cache', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+
+  sql.run`CREATE TABLE t (id INTEGER)`
+  sql.run`INSERT INTO t VALUES (${1})`
+  t.is(sql.size, 2)
+
+  sql.clear()
+  t.is(sql.size, 0)
+})
+
+test('tag store db getter returns the database', (t) => {
+  using db = new DatabaseSync(':memory:')
+  const sql = db.createTagStore()
+  t.is(sql.db, db)
+})
+
+test('createTagStore throws when database is not open', (t) => {
+  using db = new DatabaseSync(':memory:')
+  db.close()
+  t.exception(() => db.createTagStore(), /DATABASE_NOT_OPEN/)
+})
+
+test('createTagStore validates maxSize', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.createTagStore(0), /INVALID_ARGUMENT/)
+  t.exception(() => db.createTagStore(-1), /INVALID_ARGUMENT/)
+  t.exception(() => db.createTagStore(1.5), /INVALID_ARGUMENT/)
+})

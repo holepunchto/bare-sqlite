@@ -84,6 +84,22 @@ Load an SQLite extension from `path`. `entryPoint` is the C initialization funct
 
 Toggle extension loading at runtime. Useful for enabling extension loading during setup and disabling it before running user-supplied SQL. Throws if `allowExtension` was not enabled at construction.
 
+#### `const sql = db.createTagStore([maxSize])`
+
+Create an LRU cache of prepared statements keyed on the SQL string produced by a tagged template. `maxSize` defaults to `1000`. The returned store exposes `sql.all`, `sql.get`, `sql.iterate`, and `sql.run` as tag functions; placeholder values are bound positionally.
+
+```js
+const sql = db.createTagStore()
+
+sql.run`INSERT INTO users (name) VALUES (${name})`
+
+const user = sql.get`SELECT * FROM users WHERE id = ${id}`
+const users = sql.all`SELECT * FROM users`
+for (const row of sql.iterate`SELECT * FROM users`) { ... }
+```
+
+The store also exposes `sql.size`, `sql.capacity`, `sql.db`, and `sql.clear()`. Two call sites that produce the same SQL share a cache entry, since the cache is keyed on the joined string.
+
 #### `stmt.sourceSQL`
 
 The original SQL string that the statement was compiled from.
