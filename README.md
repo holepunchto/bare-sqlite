@@ -25,154 +25,417 @@ for (const row of db.prepare('SELECT id, title FROM books').iterate()) {
 db.close()
 ```
 
+<!-- bare-refgen:api start -->
+
 ## API
 
-#### `const db = new DatabaseSync(location[, options])`
+### DatabaseSync
+
+#### `new DatabaseSync(location: string, opts?: SQLiteDatabaseSync.Options)`
 
 Open a SQLite database. `location` is a path to a database file, or `':memory:'` for an in-memory database.
 
-Options include:
+**Parameters**
 
-```js
-options = {
-  open: true,
-  readOnly: false,
-  enableForeignKeyConstraints: true,
-  enableDoubleQuotedStringLiterals: false,
-  allowExtension: false,
-  timeout: 0
-}
-```
+| Parameter  | Type                         | Default | Description                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ---------- | ---------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `location` | `string`                     | —       | Path to the database file, or `':memory:'` for an in-memory database.                                                                                                                                                                                                                                                                                                                                           |
+| `opts?`    | `SQLiteDatabaseSync.Options` | —       | Options. `open` opens the database immediately (default `true`); `readOnly` opens it read-only (default `false`); `enableForeignKeyConstraints` enforces foreign keys (default `true`); `enableDoubleQuotedStringLiterals` permits double-quoted string literals (default `false`); `allowExtension` permits loading extensions (default `false`); `timeout` is the busy-timeout in milliseconds (default `0`). |
 
-`open` controls whether the database is opened during construction. With `open: false`, the instance is initialised but the underlying connection is deferred until `db.open()` is called.
-
-`readOnly` opens the database in read-only mode.
-
-`enableForeignKeyConstraints` controls whether foreign key constraints are enforced.
-
-`enableDoubleQuotedStringLiterals` controls whether double-quoted strings are interpreted as string literals (rather than identifiers) in DML and DDL.
-
-`allowExtension` is the master switch for `db.loadExtension()` and `db.enableLoadExtension()`. When `false` (the default), both methods throw. When `true`, extension loading via the C API is enabled; the SQL `load_extension()` function remains disabled.
-
-`timeout` is the busy timeout in milliseconds. When non-zero, SQLite waits up to that long for a lock before returning a `BUSY` error.
-
-#### `db.isOpen`
-
-`true` if the database is currently open, `false` otherwise.
-
-#### `db.open()`
-
-Open the database. Throws if already open. Useful when the database was constructed with `open: false`.
-
-#### `db.close()`
+#### `close(): void`
 
 Close the database. Throws if not open. Prepared statements that are still reachable from JavaScript remain valid until they are finalized; the underlying connection is released once the last statement is gone.
 
-#### `db.exec(sql)`
+**Throws**
 
-Execute one or more SQL statements without returning rows. `sql` may contain multiple statements separated by `;`.
+- `DATABASE_NOT_OPEN` — the database is not open.
 
-#### `const stmt = db.prepare(sql)`
-
-Compile `sql` into a prepared statement. The returned `StatementSync` can be reused with different parameter values.
-
-#### `db.loadExtension(path[, entryPoint])`
-
-Load an SQLite extension from `path`. `entryPoint` is the C initialization function name; when omitted, SQLite derives it from the filename. Throws if `allowExtension` was not enabled at construction.
-
-#### `db.enableLoadExtension(allow)`
-
-Toggle extension loading at runtime. Useful for enabling extension loading during setup and disabling it before running user-supplied SQL. Throws if `allowExtension` was not enabled at construction.
-
-#### `const sql = db.createTagStore([maxSize])`
+#### `createTagStore(maxSize?: number): TagStore`
 
 Create an LRU cache of prepared statements keyed on the SQL string produced by a tagged template. `maxSize` defaults to `1000`. The returned store exposes `sql.all`, `sql.get`, `sql.iterate`, and `sql.run` as tag functions; placeholder values are bound positionally.
 
-```js
-const sql = db.createTagStore()
+**Parameters**
 
-sql.run`INSERT INTO users (name) VALUES (${name})`
+| Parameter  | Type     | Default | Description                                                                                                    |
+| ---------- | -------- | ------- | -------------------------------------------------------------------------------------------------------------- |
+| `maxSize?` | `number` | —       | Maximum number of cached prepared statements before the least-recently-used entry is evicted (default `1000`). |
 
-const user = sql.get`SELECT * FROM users WHERE id = ${id}`
-const users = sql.all`SELECT * FROM users`
-for (const row of sql.iterate`SELECT * FROM users`) { ... }
+**Returns** `TagStore` — A `TagStore` exposing `all`, `get`, `iterate`, and `run` as tagged-template functions.
+
+**Throws**
+
+- `DATABASE_NOT_OPEN` — the database is not open.
+- `INVALID_ARGUMENT` — `maxSize` is not a positive integer.
+
+#### `DatabaseSync.Options`
+
+```ts
+interface Options {
+  open?: boolean
+  readOnly?: boolean
+  enableForeignKeyConstraints?: boolean
+  enableDoubleQuotedStringLiterals?: boolean
+  allowExtension?: boolean
+  timeout?: number
+}
 ```
 
-The store also exposes `sql.size`, `sql.capacity`, `sql.db`, and `sql.clear()`. Two call sites that produce the same SQL share a cache entry, since the cache is keyed on the joined string.
+#### `enableLoadExtension(allow: boolean): void`
 
-#### `stmt.sourceSQL`
+Toggle extension loading at runtime. Useful for enabling extension loading during setup and disabling it before running user-supplied SQL. Throws if `allowExtension` was not enabled at construction.
 
-The original SQL string that the statement was compiled from.
+**Parameters**
 
-#### `stmt.expandedSQL`
+| Parameter | Type      | Default | Description                                                      |
+| --------- | --------- | ------- | ---------------------------------------------------------------- |
+| `allow`   | `boolean` | —       | When `true`, enable extension loading; when `false`, disable it. |
 
-The SQL with bound parameter values substituted in, or `null` if SQLite couldn't expand it.
+**Throws**
 
-#### `const rows = stmt.all(...params)`
+- `DATABASE_NOT_OPEN` — the database is not open.
+- `LOAD_EXTENSION_DISABLED` — `allowExtension` was not enabled at construction.
+
+#### `exec(sql: string): void`
+
+Execute one or more SQL statements without returning rows. `sql` may contain multiple statements separated by `;`.
+
+**Parameters**
+
+| Parameter | Type     | Default | Description                                              |
+| --------- | -------- | ------- | -------------------------------------------------------- |
+| `sql`     | `string` | —       | One or more SQL statements to execute, separated by `;`. |
+
+**Throws**
+
+- `DATABASE_NOT_OPEN` — the database is not open.
+
+#### `isOpen: boolean`
+
+`true` if the database is currently open, `false` otherwise.
+
+#### `loadExtension(path: string, entryPoint?: string | null): void`
+
+Load an SQLite extension from `path`. `entryPoint` is the C initialization function name; when omitted, SQLite derives it from the filename. Throws if `allowExtension` was not enabled at construction.
+
+**Parameters**
+
+| Parameter     | Type             | Default | Description                                                                                                |
+| ------------- | ---------------- | ------- | ---------------------------------------------------------------------------------------------------------- |
+| `path`        | `string`         | —       | Path to the shared library implementing the SQLite extension.                                              |
+| `entryPoint?` | `string \| null` | —       | Name of the C initialization function to call; when omitted (`null`), SQLite derives it from the filename. |
+
+**Throws**
+
+- `DATABASE_NOT_OPEN` — the database is not open.
+- `LOAD_EXTENSION_DISABLED` — `allowExtension` was not enabled at construction.
+
+#### `open(): void`
+
+Open the database. Throws if already open. Useful when the database was constructed with `open: false`.
+
+**Throws**
+
+- `DATABASE_ALREADY_OPEN` — the database is already open.
+
+#### `prepare(sql: string): StatementSync`
+
+Compile `sql` into a prepared statement. The returned `StatementSync` can be reused with different parameter values.
+
+**Parameters**
+
+| Parameter | Type     | Default | Description                                            |
+| --------- | -------- | ------- | ------------------------------------------------------ |
+| `sql`     | `string` | —       | The SQL to compile into a reusable prepared statement. |
+
+**Returns** `StatementSync` — A `StatementSync` that can be reused with different parameter values.
+
+**Throws**
+
+- `DATABASE_NOT_OPEN` — the database is not open.
+
+### StatementSync
+
+#### `StatementSync.all`
+
+```ts
+all<T extends SQLiteStatementSync.Row = SQLiteStatementSync.Row>(...params: SQLiteStatementSync.Parameters): T[]
+```
 
 Execute the statement and return all rows as an array of objects keyed by column name.
 
-#### `const rows = stmt.values(...params)`
+**Parameters**
 
-Execute the statement and return all rows as an array of value tuples, one per row, in the order given by `stmt.columns()`. Cheaper than `stmt.all()` when column names aren't needed.
+| Parameter | Type                             | Default | Description                                                                                                                                                  |
+| --------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `params`  | `SQLiteStatementSync.Parameters` | —       | Values to bind to the statement placeholders. An optional leading plain object binds named parameters; the remaining arguments bind positional placeholders. |
 
-#### `const row = stmt.get(...params)`
+**Returns** `T[]` — All result rows, as an array of objects keyed by column name.
+
+#### `columns(): SQLiteStatementSync.Column[]`
+
+Return an array describing the statement's result columns.
+
+**Returns** `SQLiteStatementSync.Column[]` — An array describing the statement result columns.
+
+#### `expandedSQL: string | null`
+
+The SQL with bound parameter values substituted in, or `null` if SQLite couldn't expand it.
+
+#### `StatementSync.get`
+
+```ts
+get<T extends SQLiteStatementSync.Row = SQLiteStatementSync.Row>(...params: SQLiteStatementSync.Parameters): T | undefined
+```
 
 Execute the statement and return the first row, or `undefined` if there are no rows.
 
-#### `const result = stmt.run(...params)`
+**Parameters**
 
-Execute the statement, discarding any rows. Returns `{ changes, lastInsertRowid }`.
+| Parameter | Type                             | Default | Description                                                                                                                                                  |
+| --------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `params`  | `SQLiteStatementSync.Parameters` | —       | Values to bind to the statement placeholders. An optional leading plain object binds named parameters; the remaining arguments bind positional placeholders. |
 
-#### `for (const row of stmt.iterate(...params)) { ... }`
+**Returns** `T | undefined` — The first result row, or `undefined` if the query produced no rows.
 
-Execute the statement and yield rows one at a time. The statement is reset automatically once the iterator is exhausted or abandoned.
+#### `StatementSync.iterate`
 
-#### `const info = stmt.columns()`
-
-Return an array describing the statement's result columns:
-
-```js
-;[{ column, name, database, table, type }]
+```ts
+iterate<T extends SQLiteStatementSync.Row = SQLiteStatementSync.Row>(...params: SQLiteStatementSync.Parameters): IterableIterator<T>
 ```
 
-`column` is the underlying column name, `name` is the alias used in the result, `database` and `table` identify the source, and `type` is the declared SQLite type. All five are `null` for expression columns.
+Execute the statement and return an iterator that yields result rows one at a time as objects keyed by column name.
 
-#### `stmt.setReadBigInts(enabled)`
+**Parameters**
 
-When `true`, `INTEGER` columns are returned as `BigInt` rather than `Number`. `changes` and `lastInsertRowid` from `stmt.run()` are returned as `BigInt` too. Default is `false`.
+| Parameter | Type                             | Default | Description                                                                                                                                                  |
+| --------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `params`  | `SQLiteStatementSync.Parameters` | —       | Values to bind to the statement placeholders. An optional leading plain object binds named parameters; the remaining arguments bind positional placeholders. |
 
-#### `stmt.setAllowBareNamedParameters(allow)`
+**Returns** `IterableIterator<T>` — An iterator that yields result rows one at a time as objects keyed by column name.
+
+#### `run(...params: SQLiteStatementSync.Parameters): SQLiteStatementSync.RunResult`
+
+Execute the statement and return a result object with `changes` (the number of rows modified) and `lastInsertRowid`.
+
+**Parameters**
+
+| Parameter | Type                             | Default | Description                                                                                                                                                  |
+| --------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `params`  | `SQLiteStatementSync.Parameters` | —       | Values to bind to the statement placeholders. An optional leading plain object binds named parameters; the remaining arguments bind positional placeholders. |
+
+**Returns** `SQLiteStatementSync.RunResult` — A result object with `changes` (the number of rows modified) and `lastInsertRowid`.
+
+#### `setAllowBareNamedParameters(allow: boolean): void`
 
 When `true` (the default), named-parameter lookup falls back to the bare key when the sigil-prefixed key (`':foo'`) is not found. When `false`, only sigil-prefixed keys are considered.
 
-#### `stmt.setAllowUnknownNamedParameters(allow)`
+**Parameters**
+
+| Parameter | Type      | Default | Description                                                                                                                                                          |
+| --------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `allow`   | `boolean` | —       | When `true` (the default), named-parameter lookup falls back to the bare key when the sigil-prefixed key is not found; when `false`, only sigil-prefixed keys match. |
+
+#### `setAllowUnknownNamedParameters(allow: boolean): void`
 
 When `false` (the default), passing a named-parameters object with keys that don't correspond to any placeholder throws `INVALID_ARGUMENT`. When `true`, extras are silently ignored.
 
-#### Parameter binding
+**Parameters**
 
-The first argument to `stmt.all`, `stmt.get`, `stmt.run`, and `stmt.iterate` is treated as a named-parameters object when it is a non-null, non-array object that isn't a typed array or `ArrayBuffer`; otherwise all arguments are positional. Named and positional arguments may be combined by passing the object first and the positional values after it.
+| Parameter | Type      | Default | Description                                                                                             |
+| --------- | --------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `allow`   | `boolean` | —       | When `false` (the default), unknown named-parameter keys throw; when `true`, they are silently ignored. |
 
-Supported input values map to SQLite types as follows. Any other value throws `INVALID_ARGUMENT`.
+#### `setReadBigInts(enabled: boolean): void`
 
-| JavaScript                                 | SQLite              |
-| ------------------------------------------ | ------------------- |
-| `null`, `undefined`                        | `NULL`              |
-| `number`                                   | `INTEGER` or `REAL` |
-| `BigInt`                                   | `INTEGER`           |
-| `string`                                   | `TEXT`              |
-| `ArrayBuffer`, `Uint8Array`, `Buffer`, ... | `BLOB`              |
+When `true`, `INTEGER` columns are returned as `BigInt` rather than `Number`. `changes` and `lastInsertRowid` from `stmt.run()` are returned as `BigInt` too. Default is `false`.
 
-Column values are returned as:
+**Parameters**
 
-| SQLite    | JavaScript                                   |
-| --------- | -------------------------------------------- |
-| `NULL`    | `null`                                       |
-| `INTEGER` | `Number` (or `BigInt` with `setReadBigInts`) |
-| `REAL`    | `Number`                                     |
-| `TEXT`    | `string`                                     |
-| `BLOB`    | `Buffer`                                     |
+| Parameter | Type      | Default | Description                                                                                                                                        |
+| --------- | --------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `enabled` | `boolean` | —       | When `true`, `INTEGER` columns (and the `changes`/`lastInsertRowid` from `run()`) are returned as `BigInt` rather than `Number` (default `false`). |
+
+#### `sourceSQL: string`
+
+The original SQL string that the statement was compiled from.
+
+#### `StatementSync.BindValue`
+
+```ts
+type BindValue = null | undefined | number | bigint | string | ArrayBuffer | ArrayBufferView
+```
+
+#### `StatementSync.Column`
+
+```ts
+interface Column {
+  column: string | null
+  name: string | null
+  database: string | null
+  table: string | null
+  type: string | null
+}
+```
+
+#### `StatementSync.NamedParameters`
+
+```ts
+type NamedParameters = Record<string, BindValue>
+```
+
+#### `StatementSync.Parameters`
+
+```ts
+type Parameters = [NamedParameters, ...BindValue[]] | BindValue[]
+```
+
+#### `StatementSync.Row`
+
+```ts
+type Row = Record<string, Value>
+```
+
+#### `StatementSync.RunResult`
+
+```ts
+interface RunResult {
+  changes: number | bigint
+  lastInsertRowid: number | bigint
+}
+```
+
+#### `StatementSync.Value`
+
+```ts
+type Value = null | number | bigint | string | Buffer
+```
+
+#### `StatementSync.values`
+
+```ts
+values<T extends SQLiteStatementSync.Value[] = SQLiteStatementSync.Value[]>(...params: SQLiteStatementSync.Parameters): T[]
+```
+
+Execute the statement and return all rows as an array of value tuples, one per row, in the order given by `stmt.columns()`. Cheaper than `stmt.all()` when column names aren't needed.
+
+**Parameters**
+
+| Parameter | Type                             | Default | Description                                                                                                                                                  |
+| --------- | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `params`  | `SQLiteStatementSync.Parameters` | —       | Values to bind to the statement placeholders. An optional leading plain object binds named parameters; the remaining arguments bind positional placeholders. |
+
+**Returns** `T[]` — All result rows, as an array of value tuples ordered by `columns()`.
+
+### TagStore
+
+#### `TagStore.all`
+
+```ts
+all<T extends StatementSync.Row = StatementSync.Row>(strings: readonly string[], ...params: StatementSync.BindValue[]): T[]
+```
+
+Execute the statement and return all rows as an array of objects keyed by column name.
+
+**Parameters**
+
+| Parameter | Type                        | Default | Description                                                                                        |
+| --------- | --------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `strings` | `readonly string[]`         | —       | The template string parts (the `strings` array of a tagged template).                              |
+| `params`  | `StatementSync.BindValue[]` | —       | The interpolated template values, bound positionally to the placeholders between the string parts. |
+
+**Returns** `T[]` — All result rows, as an array of objects keyed by column name.
+
+#### `capacity: number`
+
+The maximum number of statements the cache holds before evicting the least-recently-used entry.
+
+#### `clear(): void`
+
+Evict all cached prepared statements.
+
+#### `db: DatabaseSync`
+
+The `DatabaseSync` this store prepares statements against.
+
+#### `TagStore.get`
+
+```ts
+get<T extends StatementSync.Row = StatementSync.Row>(strings: readonly string[], ...params: StatementSync.BindValue[]): T | undefined
+```
+
+Execute the statement and return the first row, or `undefined` if there are no rows.
+
+**Parameters**
+
+| Parameter | Type                        | Default | Description                                                                                        |
+| --------- | --------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `strings` | `readonly string[]`         | —       | The template string parts (the `strings` array of a tagged template).                              |
+| `params`  | `StatementSync.BindValue[]` | —       | The interpolated template values, bound positionally to the placeholders between the string parts. |
+
+**Returns** `T | undefined` — The first result row, or `undefined` if the query produced no rows.
+
+#### `TagStore.iterate`
+
+```ts
+iterate<T extends StatementSync.Row = StatementSync.Row>(strings: readonly string[], ...params: StatementSync.BindValue[]): IterableIterator<T>
+```
+
+Execute the statement and return an iterator that yields result rows one at a time as objects keyed by column name.
+
+**Parameters**
+
+| Parameter | Type                        | Default | Description                                                                                        |
+| --------- | --------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `strings` | `readonly string[]`         | —       | The template string parts (the `strings` array of a tagged template).                              |
+| `params`  | `StatementSync.BindValue[]` | —       | The interpolated template values, bound positionally to the placeholders between the string parts. |
+
+**Returns** `IterableIterator<T>` — An iterator that yields result rows one at a time as objects keyed by column name.
+
+#### `run(strings: readonly string[], ...params: StatementSync.BindValue[]): StatementSync.RunResult`
+
+Execute the statement and return a result object with `changes` (the number of rows modified) and `lastInsertRowid`.
+
+**Parameters**
+
+| Parameter | Type                        | Default | Description                                                                                        |
+| --------- | --------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `strings` | `readonly string[]`         | —       | The template string parts (the `strings` array of a tagged template).                              |
+| `params`  | `StatementSync.BindValue[]` | —       | The interpolated template values, bound positionally to the placeholders between the string parts. |
+
+**Returns** `StatementSync.RunResult` — A result object with `changes` (the number of rows modified) and `lastInsertRowid`.
+
+#### `size: number`
+
+The number of prepared statements currently cached.
+
+#### `TagStore.values`
+
+```ts
+values<T extends StatementSync.Value[] = StatementSync.Value[]>(strings: readonly string[], ...params: StatementSync.BindValue[]): T[]
+```
+
+Execute the statement and return all rows as an array of value tuples, one per row, in the order given by `stmt.columns()`. Cheaper than `stmt.all()` when column names aren't needed.
+
+**Parameters**
+
+| Parameter | Type                        | Default | Description                                                                                        |
+| --------- | --------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `strings` | `readonly string[]`         | —       | The template string parts (the `strings` array of a tagged template).                              |
+| `params`  | `StatementSync.BindValue[]` | —       | The interpolated template values, bound positionally to the placeholders between the string parts. |
+
+**Returns** `T[]` — All result rows, as an array of value tuples ordered by `columns()`.
+
+### Classes
+
+#### `errors`
+
+```ts
+class errors {
+  code: string
+}
+```
+
+<!-- bare-refgen:api end -->
 
 ## License
 
