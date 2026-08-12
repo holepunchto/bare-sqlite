@@ -11,7 +11,10 @@ interface SQLiteStatementSync {
     ...params: SQLiteStatementSync.Parameters
   ): T[]
 
-  /** Execute the statement and return all rows as an array of value tuples, one per row, in the order given by `stmt.columns()`. Cheaper than `stmt.all()` when column names aren't needed. */
+  /**
+   * Execute the statement and return all rows as an array of value tuples, one per row, in the
+   * order given by `stmt.columns()`. Cheaper than `stmt.all()` when column names aren't needed.
+   */
   values<T extends SQLiteStatementSync.Value[] = SQLiteStatementSync.Value[]>(
     ...params: SQLiteStatementSync.Parameters
   ): T[]
@@ -21,10 +24,16 @@ interface SQLiteStatementSync {
     ...params: SQLiteStatementSync.Parameters
   ): T | undefined
 
-  /** Execute the statement and return a result object with `changes` (the number of rows modified) and `lastInsertRowid`. */
+  /**
+   * Execute the statement and return a result object with `changes` (the number of rows modified)
+   * and `lastInsertRowid`.
+   */
   run(...params: SQLiteStatementSync.Parameters): SQLiteStatementSync.RunResult
 
-  /** Execute the statement and return an iterator that yields result rows one at a time as objects keyed by column name. */
+  /**
+   * Execute the statement and return an iterator that yields result rows one at a time as objects
+   * keyed by column name.
+   */
   iterate<T extends SQLiteStatementSync.Row = SQLiteStatementSync.Row>(
     ...params: SQLiteStatementSync.Parameters
   ): IterableIterator<T>
@@ -36,18 +45,25 @@ interface SQLiteStatementSync {
   columns(): SQLiteStatementSync.Column[]
 
   /**
-   * When `true` (the default), named-parameter lookup falls back to the bare key when the sigil-prefixed key (`':foo'`) is not found. When `false`, only sigil-prefixed keys are considered.
-   * @param allow - When `true` (the default), named-parameter lookup falls back to the bare key when the sigil-prefixed key is not found; when `false`, only sigil-prefixed keys match.
+   * When `true` (the default), named-parameter lookup falls back to the bare key when the
+   * sigil-prefixed key (`':foo'`) is not found. When `false`, only sigil-prefixed keys are
+   * considered.
+   * @param allow - When `true` (the default), named-parameter lookup falls back to the bare key
+   * when the sigil-prefixed key is not found; when `false`, only sigil-prefixed keys match.
    */
   setAllowBareNamedParameters(allow: boolean): void
   /**
-   * When `false` (the default), passing a named-parameters object with keys that don't correspond to any placeholder throws `INVALID_ARGUMENT`. When `true`, extras are silently ignored.
-   * @param allow - When `false` (the default), unknown named-parameter keys throw; when `true`, they are silently ignored.
+   * When `false` (the default), passing a named-parameters object with keys that don't correspond
+   * to any placeholder throws `INVALID_ARGUMENT`. When `true`, extras are silently ignored.
+   * @param allow - When `false` (the default), unknown named-parameter keys throw; when `true`,
+   * they are silently ignored.
    */
   setAllowUnknownNamedParameters(allow: boolean): void
   /**
-   * When `true`, `INTEGER` columns are returned as `BigInt` rather than `Number`. `changes` and `lastInsertRowid` from `stmt.run()` are returned as `BigInt` too. Default is `false`.
-   * @param enabled - When `true`, `INTEGER` columns (and the `changes`/`lastInsertRowid` from `run()`) are returned as `BigInt` rather than `Number` (default `false`).
+   * When `true`, `INTEGER` columns are returned as `BigInt` rather than `Number`. `changes` and
+   * `lastInsertRowid` from `stmt.run()` are returned as `BigInt` too. Default is `false`.
+   * @param enabled - When `true`, `INTEGER` columns (and the `changes`/`lastInsertRowid` from
+   * `run()`) are returned as `BigInt` rather than `Number` (default `false`).
    */
   setReadBigInts(enabled: boolean): void
 
