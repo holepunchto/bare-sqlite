@@ -27,7 +27,7 @@ db.close()
 
 ## API
 
-See the [full API reference](https://docs.pears.com/reference/bare/modules/bare-sqlite).
+See the [`bare-sqlite` reference](https://docs.pears.com/reference/bare/modules/bare-sqlite).
 
 ## License
 
