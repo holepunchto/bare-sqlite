@@ -37,13 +37,7 @@ declare namespace SQLiteStatementSync {
   export type Value = null | number | bigint | string | Buffer
 
   export type BindValue =
-    | null
-    | undefined
-    | number
-    | bigint
-    | string
-    | ArrayBuffer
-    | ArrayBufferView
+    null | undefined | number | bigint | string | ArrayBuffer | ArrayBufferView
 
   export type Row = Record<string, Value>
 
