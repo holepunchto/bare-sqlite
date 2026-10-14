@@ -390,7 +390,14 @@ bare_sqlite_load_extension(js_env_t *env, js_callback_info_t *info) {
   }
 
   char *errmsg = NULL;
-  int status = sqlite3_load_extension(db->handle, (const char *) path, (const char *) entry, &errmsg);
+  int status = SQLITE_OK;
+
+#ifdef SQLITE_OMIT_LOAD_EXTENSION
+  status = SQLITE_ERROR;
+  errmsg = sqlite3_mprintf("extension loading is not supported");
+#else
+  status = sqlite3_load_extension(db->handle, (const char *) path, (const char *) entry, &errmsg);
+#endif
 
   free(path);
   if (entry != NULL) free(entry);
