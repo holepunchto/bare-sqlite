@@ -1,5 +1,5 @@
 #include <assert.h>
-#include <bare.h>
+#include <bare/module.h>
 #include <js.h>
 #include <sqlite3.h>
 #include <stdbool.h>
@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <utf.h>
-#include <uv.h>
 
 typedef utf8_t bare_sqlite_path_t[4096];
 
