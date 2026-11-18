@@ -1,6 +1,6 @@
 {
   "name": "bare-sqlite",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "SQLite bindings for Bare",
   "exports": {
     "./package": "./package.json",
