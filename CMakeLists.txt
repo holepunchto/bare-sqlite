@@ -27,7 +27,7 @@ target_compile_definitions(
     SQLITE_ENABLE_COLUMN_METADATA
 )
 
-add_bare_module(bare_sqlite EXPORTS)
+add_bare_module(bare_sqlite EXPORTS INSTALL PRIVACY_MANIFEST PrivacyInfo.xcprivacy)
 
 target_sources(
   ${bare_sqlite}
