@@ -462,6 +462,35 @@ test('file-backed database persists across reopens', async (t) => {
   }
 })
 
+test('location with a NUL', async (t) => {
+  const file = path.join(await t.tmp(), 'test.db')
+
+  t.exception(() => new DatabaseSync(file + '\0.bak'), /INVALID_ARGUMENT/)
+  t.exception(() => new DatabaseSync(file, { readOnly: true }), /CANTOPEN/, 'nothing was created')
+})
+
+test('long location', async (t) => {
+  const file = (await t.tmp()) + path.sep + `.${path.sep}`.repeat(200) + 'test.db'
+
+  using db = new DatabaseSync(file)
+  t.alike(db.prepare('SELECT 1 AS r').get(), { r: 1 })
+})
+
+test('location longer than SQLite allows', (t) => {
+  t.exception(() => new DatabaseSync('a'.repeat(5000)), /CANTOPEN/)
+})
+
+test('loadExtension with a NUL', (t) => {
+  using db = new DatabaseSync(':memory:', { allowExtension: true })
+  t.exception(() => db.loadExtension('/definitely/not/real.so\0x'), /INVALID_ARGUMENT/)
+  t.exception(() => db.loadExtension('/definitely/not/real.so', 'init\0x'), /INVALID_ARGUMENT/)
+})
+
+test('named parameter with a NUL is unknown', (t) => {
+  using db = new DatabaseSync(':memory:')
+  t.exception(() => db.prepare('SELECT :a AS a').get({ a: 1, 'a\0x': 2 }), /INVALID_ARGUMENT/)
+})
+
 test('Uint8Array first argument is treated as positional, not named', (t) => {
   using db = new DatabaseSync(':memory:')
   db.prepare('CREATE TABLE t (b BLOB)').run()
