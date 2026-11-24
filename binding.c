@@ -8,7 +8,7 @@
 #include <string.h>
 #include <utf.h>
 
-typedef utf8_t bare_sqlite_path_t[4096];
+typedef utf8_t bare_sqlite_string_buffer_t[256];
 
 typedef struct bare_sqlite_statement_s bare_sqlite_statement_t;
 
@@ -144,6 +144,37 @@ bare_sqlite__on_finalize_statement(js_env_t *env, void *data, void *hint) {
   free(stmt);
 }
 
+static utf8_t *
+bare_sqlite__get_string(js_env_t *env, js_value_t *value, bare_sqlite_string_buffer_t buffer, bool *valid) {
+  int err;
+
+  size_t str_len;
+  err = js_get_value_string_utf8(env, value, NULL, 0, &str_len);
+  assert(err == 0);
+
+  utf8_t *result = buffer;
+
+  size_t len = sizeof(bare_sqlite_string_buffer_t);
+
+  if (str_len + 1 /* NULL */ > len) {
+    len = str_len + 1 /* NULL */;
+
+    result = malloc(len);
+  }
+
+  err = js_get_value_string_utf8(env, value, result, len, NULL);
+  assert(err == 0);
+
+  *valid = strlen((char *) result) == str_len;
+
+  return result;
+}
+
+static void
+bare_sqlite__free_string(utf8_t *string, utf8_t *buffer) {
+  if (string != buffer) free(string);
+}
+
 static js_value_t *
 bare_sqlite_open(js_env_t *env, js_callback_info_t *info) {
   int err;
@@ -156,9 +187,19 @@ bare_sqlite_open(js_env_t *env, js_callback_info_t *info) {
 
   assert(argc == 6);
 
-  bare_sqlite_path_t location;
-  err = js_get_value_string_utf8(env, argv[0], location, sizeof(location), NULL);
-  assert(err == 0);
+  bool valid;
+
+  bare_sqlite_string_buffer_t location_buffer;
+  utf8_t *location = bare_sqlite__get_string(env, argv[0], location_buffer, &valid);
+
+  if (!valid) {
+    bare_sqlite__free_string(location, location_buffer);
+
+    err = js_throw_type_error(env, NULL, "Location must not contain null bytes");
+    assert(err == 0);
+
+    return NULL;
+  }
 
   bool read_only;
   err = js_get_value_bool(env, argv[1], &read_only);
@@ -185,6 +226,8 @@ bare_sqlite_open(js_env_t *env, js_callback_info_t *info) {
   sqlite3 *handle = NULL;
 
   int status = sqlite3_open_v2((const char *) location, &handle, flags, NULL);
+
+  bare_sqlite__free_string(location, location_buffer);
 
   if (status != SQLITE_OK) {
     const char *errmsg = handle != NULL ? sqlite3_errmsg(handle) : sqlite3_errstr(status);
@@ -371,13 +414,13 @@ bare_sqlite_load_extension(js_env_t *env, js_callback_info_t *info) {
   assert(err == 0);
 
   utf8_t *entry = NULL;
+  size_t entry_len = 0;
 
   js_value_type_t entry_type;
   err = js_typeof(env, argv[2], &entry_type);
   assert(err == 0);
 
   if (entry_type == js_string) {
-    size_t entry_len;
     err = js_get_value_string_utf8(env, argv[2], NULL, 0, &entry_len);
     assert(err == 0);
 
@@ -387,6 +430,16 @@ bare_sqlite_load_extension(js_env_t *env, js_callback_info_t *info) {
 
     err = js_get_value_string_utf8(env, argv[2], entry, entry_len, NULL);
     assert(err == 0);
+  }
+
+  if (strlen((char *) path) != path_len - 1 /* NULL */ || (entry != NULL && strlen((char *) entry) != entry_len - 1 /* NULL */)) {
+    free(path);
+    free(entry);
+
+    err = js_throw_type_error(env, NULL, "Path and entry point must not contain null bytes");
+    assert(err == 0);
+
+    return NULL;
   }
 
   char *errmsg = NULL;
@@ -651,13 +704,15 @@ bare_sqlite__bind_params(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_
       err = js_get_element(env, keys, k, &key_value);
       if (err < 0) return err;
 
-      utf8_t key[256];
-      err = js_get_value_string_utf8(env, key_value, key, sizeof(key), NULL);
-      if (err < 0) return err;
+      bool valid;
 
+      bare_sqlite_string_buffer_t key_buffer;
+      utf8_t *key = bare_sqlite__get_string(env, key_value, key_buffer, &valid);
+
+      // A key that holds a NUL can never name a parameter.
       bool known = false;
 
-      for (int i = 1; i <= n; i++) {
+      for (int i = 1; valid && i <= n; i++) {
         const char *name = sqlite3_bind_parameter_name(stmt->handle, i);
         if (name == NULL) continue;
 
@@ -671,6 +726,8 @@ bare_sqlite__bind_params(js_env_t *env, bare_sqlite_statement_t *stmt, js_value_
           break;
         }
       }
+
+      bare_sqlite__free_string(key, key_buffer);
 
       if (!known) {
         return js_throw_type_error(env, NULL, "Unknown named parameter");
